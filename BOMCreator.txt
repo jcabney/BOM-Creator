@@ -1,0 +1,186 @@
+' Written in Excel Visual Basic 
+' Used to create product bill of material given product configuration code.
+' Initially, bill of material was created manually from parts lists in Excel. Program created to automate the process. 
+' Program efficiency not critical as the product volume is relatively low. 
+
+' The program has two parts. The first, Module1, takes assembly numbers and pulls in the part info for that assembly. 
+' The second, Module2, consolidates and sorts those parts into a final list.
+'
+' The input required is the product code. The program goes to the “BOM Program” tab and looks at the particular assembly 
+' type, which tells it where to grab the parts from and what parts to grab. 
+'
+' The assembly parts are added to the list below the product code. Once the parts for the assembly are printed to the
+' lines, the program goes down the list looking for assemblies. The parts for each assembly are printed and the 
+' process continues until all the assembly parts have been written.
+'
+' After the initial list of parts has been created, the program scrolls through each assembly/part searching the 
+' list for identical parts, adding the quantities together, and deleting those parts. 
+' The assembly or part # with the total quantity is printed to the “Complied Part List” tab. This continues line by 
+' line, until the original list is blank. The part type is then added, and the list sorted.
+
+
+Module1
+
+Sub Macro1()
+
+Dim assemblyNum, partnum, desc, ws, unit, assembly, check As String
+Dim assemblyCount, row, column, adjColumn1, adjColumn2, partCount, reference, checkNum As Integer
+Dim qty, assemblyQty As Double
+Dim Rng As Range
+                                                               
+Worksheets("Part List").Range("A3:M3000").ClearContents                                                     ' clears cells before starting compilation
+
+partCount = 3                                                                                               ' row on "Part List" tab to write part numbers
+checkNum = 2                                                                                                ' row on "Part List" tab to check for assembly
+
+Do While Worksheets("Part List").Cells(checkNum, 1).Value <> ""                                             ' Loops through lines in Part List to check whether or not parts have sub-assemblies
+    assemblyNum = Worksheets("Part List").Cells(checkNum, 1).Value                                          ' assembly or part number
+    assemblyQty = Worksheets("Part List").Cells(checkNum, 2).Value                                          ' # of assemblies
+    assemblyCount = Worksheets("Part List").Cells(checkNum, 6).Value                                        ' row on "BOM Program" tab
+    check = Worksheets("Part List").Cells(checkNum, 5).Value                                                ' is this part an assembly?
+    
+    If check = "Yes" Then                                                                                   ' Sub-assembly test
+        ws = Worksheets("BOM Program").Cells(assemblyCount, 3).Value                                        ' which tab contains sub-assembly
+        With Worksheets(ws).Range("A:A")                                                                    ' Goes to assembly tab and finds assembly
+            Set Rng = .Find(What:=assemblyNum)
+            If Not Rng Is Nothing Then                                                                      ' If assembly is found then
+                row = Rng.Cells.row                                                                         ' address of assembly
+                
+                Do While Worksheets("BOM Program").Cells(assemblyCount, 4).Value <> ""                      ' Loops through sub-assembly list to populate part list
+                    adjColumn1 = 1 + Worksheets("BOM Program").Cells(assemblyCount, 4).Value                ' finds sub-part # column offset
+                    adjColumn2 = 1 + Worksheets("BOM Program").Cells(assemblyCount, 6).Value                ' finds sub-part qty column offset
+                    partnum = Worksheets(ws).Cells(row, adjColumn1).Value                                   ' offsets appropriate # of columns to find sub-part #
+                    If Len(partnum) > 2 Then                                                                ' weeds out blank or dashed items
+                        qty = Worksheets(ws).Cells(row, adjColumn2).Value * assemblyQty                     ' offsets appropriate # of columns to find sub-part qty
+                        unit = Worksheets("BOM Program").Cells(assemblyCount, 8).Value                      ' sets unit type to variable
+                        desc = Worksheets(ws).Cells(2, adjColumn1).Value                                    ' sets part description to variable
+                        assembly = Worksheets("BOM Program").Cells(assemblyCount, 12).Value                 ' sets assembly yes or no to variable
+                        reference = Worksheets("BOM Program").Cells(assemblyCount, 13).Value                ' sets sub-assembly row on "BOM Program" tab to variable
+                        Call WriteParts(partnum, qty, unit, desc, assembly, reference, partCount, checkNum) ' calls sub to write part info to "Part List" tab
+                        assemblyCount = assemblyCount + 1                                                   ' goes to the next row on "BOM"
+                        partCount = partCount + 1                                                           ' goes to the next row on "Part List"
+                    Else
+                        assemblyCount = assemblyCount + 1                                                   ' goes to the next row on "BOM"
+                    End If
+                Loop
+            End If
+            
+        End With
+    End If
+
+    checkNum = checkNum + 1                                                                                  ' goes to the next row on "Part List" tab
+
+Loop
+ 
+Call Module2.FinalPartsList                                                                                  'compiles multiple instances into one, prints to search tab, and then sorts by Assembly, Manufacture, or Purchase
+End Sub
+
+
+Sub WriteParts(ByVal partnum As String, ByVal qty As Double, ByVal unit As String, ByVal desc As String, ByVal assembly As String, ByVal reference As Integer, ByVal partCount As Integer, ByVal checkNum As Integer)
+        
+    'writes part to "Part List" tab
+    Worksheets("Part List").Cells(partCount, 1).Value = partnum
+    Worksheets("Part List").Cells(partCount, 2).Value = qty
+    Worksheets("Part List").Cells(partCount, 3).Value = unit
+    Worksheets("Part List").Cells(partCount, 4).Value = desc
+    Worksheets("Part List").Cells(partCount, 5).Value = assembly
+    Worksheets("Part List").Cells(partCount, 6).Value = reference
+    Worksheets("Part List").Cells(partCount, 7).Value = checkNum
+
+End Sub
+
+
+
+
+
+
+Module2
+
+Sub FinalPartsList()
+Dim fRow, fCount As Integer
+Dim fQty As Double
+Dim fPart, fUnit, fDesc, nextPart, nextDesc As String
+Dim fRng As Range
+
+Worksheets("Compiled Part List").Range("A2:M3000").ClearContents                    ' clears cells before starting compilation
+fCount = 2                                                                          ' row number of new tab to write compiled part info to
+
+Do While Worksheets("Part List").Cells(3, 1).Value <> ""                            ' while part list has value, loop
+    fRow = 3                                                                        ' row number is fixed as each row is deleted once processed
+    fPart = Worksheets("Part List").Cells(fRow, 1).Value                            ' next several lines write part values to variable
+    fQty = Worksheets("Part List").Cells(fRow, 2).Value
+    fUnit = Worksheets("Part List").Cells(fRow, 3).Value
+    fDesc = Worksheets("Part List").Cells(fRow, 4).Value
+    Worksheets("Part List").Cells(fRow, 1).EntireRow.Delete                         ' when values are saved to variables, row is deleted
+        
+    Do While Worksheets("Part List").Cells(fRow, 1).Value <> ""                     ' loop down list looking for matches until the end of list is reached
+        nextPart = Worksheets("Part List").Cells(fRow, 1).Value                     ' set part number of row for comparison
+        nextDesc = Worksheets("Part List").Cells(fRow, 4).Value                     ' set description of row for comparison
+        
+        If nextPart = fPart And nextDesc = fDesc Then                               ' compare preliminary row part and description to one of subsequent row(s)
+            fQty = fQty + Worksheets("Part List").Cells(fRow, 2).Value              ' if part and descriptions match, add quantity of row to initial quantity
+            Worksheets("Part List").Cells(fRow, 1).EntireRow.Delete                 ' as row has been processed, delete
+        Else
+            fRow = fRow + 1                                                         ' move to next row
+        End If
+    Loop
+    
+    Call FinalWrite(fPart, fQty, fUnit, fDesc, fCount)                              ' write part data to new tab
+    fCount = fCount + 1                                                             ' move to next row of compiled parts tab
+Loop
+
+Call WriteDescriptions                                                              ' find description of part
+Call Sort                                                                           ' sort compiled list into "assembly, manufacture, or purchase"
+
+End Sub
+
+Sub FinalWrite(ByVal fPart As String, ByVal fQty As Double, ByVal fUnit As String, ByVal fDesc As String, ByVal fCount As Integer)
+       
+    ' writes part number info to new tab
+    Worksheets("Compiled Part List").Cells(fCount, 1).Value = fPart
+    Worksheets("Compiled Part List").Cells(fCount, 2).Value = fQty
+    Worksheets("Compiled Part List").Cells(fCount, 3).Value = fUnit
+    Worksheets("Compiled Part List").Cells(fCount, 4).Value = fDesc
+
+End Sub
+
+Sub WriteDescriptions()
+
+Dim partnum, manOrPur As String
+Dim checkRow, row As Integer
+
+    checkRow = 2                                                                                        ' Row to begin populating data
+
+    Do While Worksheets("Compiled Part List").Cells(checkRow, 1).Value <> ""                            ' While row is not blank
+        partnum = Worksheets("Compiled Part List").Cells(checkRow, 1).Value                             ' part number to look for in other tab
+        With Worksheets("Unit of Measure, Pur or Man").Range("B:B")                                     ' look for data on the second column
+            Set Rng = .Find(What:=partnum)
+
+            If Not Rng Is Nothing Then                                                                  ' if match is found
+                row = Rng.Cells.row                                                                     ' set row variable to row containing matching part number
+                manOrPur = Worksheets("Measure, Pur or Man").Cells(row, 4).Value                        ' set make, purchase, or assembly variable to value in row
+                Worksheets("Compiled Part List").Cells(checkRow, 5).Value = manOrPur                    ' write make, purchase, or assembly variable to part list tab
+            End If
+        
+            checkRow = checkRow + 1
+            End With
+    Loop
+End Sub
+
+Sub Sort()
+    
+    ' sorts compiled tab part info alphabetically by make, purchase, or assembly variable
+    Range("A2:E2000").Select
+    ActiveWorkbook.Worksheets("Compiled Part List").Sort.SortFields.Clear
+    ActiveWorkbook.Worksheets("Compiled Part List").Sort.SortFields.Add Key:=Range("E2:E2000")
+
+    With ActiveWorkbook.Worksheets("Compiled Part List").Sort
+        .SetRange Range("A2:E2000")
+        .Header = xlGuess
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+    End With
+
+End Sub
